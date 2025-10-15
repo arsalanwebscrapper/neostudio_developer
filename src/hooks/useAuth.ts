@@ -8,43 +8,39 @@ export const useAuth = () => {
   const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
 
+  const checkAdminStatus = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_roles' as any)
+        .select('role')
+        .eq('user_id', userId)
+        .eq('role', 'admin')
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Admin check error:', error);
+        setIsAdmin(false);
+      } else {
+        setIsAdmin(!!data);
+      }
+    } catch (error) {
+      console.error('Admin check failed:', error);
+      setIsAdmin(false);
+    }
+  };
+
   useEffect(() => {
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
         
         if (session?.user) {
-          // Check if user is admin - use setTimeout to avoid blocking auth state changes
-          setTimeout(async () => {
-            try {
-              console.log('Checking admin status for user:', session.user.id, session.user.email);
-              
-              const { data, error } = await supabase
-                .from('user_roles' as any)
-                .select('role')
-                .eq('user_id', session.user.id)
-                .eq('role', 'admin')
-                .maybeSingle();
-              
-              console.log('Admin check result:', { data, error });
-              
-              if (error) {
-                console.log('Admin check error:', error);
-                setIsAdmin(false);
-              } else {
-                const isAdminUser = !!data;
-                console.log('Setting isAdmin to:', isAdminUser);
-                setIsAdmin(isAdminUser);
-              }
-            } catch (error) {
-              console.log('Admin check failed:', error);
-              setIsAdmin(false);
-            }
-          }, 100);
+          setTimeout(() => {
+            checkAdminStatus(session.user.id);
+          }, 0);
         } else {
-          console.log('No session user, setting isAdmin to false');
           setIsAdmin(false);
         }
         
@@ -56,6 +52,11 @@ export const useAuth = () => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
+      
+      if (session?.user) {
+        checkAdminStatus(session.user.id);
+      }
+      
       setLoading(false);
     });
 
